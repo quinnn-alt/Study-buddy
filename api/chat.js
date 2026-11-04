@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     "Ask what they've tried before explaining. Give hints first and a full " +
     "answer only if they're still stuck. Keep replies short and clear.";
 
-  const models = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
+  const models = ["gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-2.5-flash"];
   let lastError = "";
 
   for (const model of models) {
@@ -38,11 +38,11 @@ export default async function handler(req, res) {
       if (text) {
         return res.status(200).json({ reply: text });
       }
-      lastError = data?.error?.message || JSON.stringify(data);
+      lastError = model + ": " + (data?.error?.message || JSON.stringify(data));
     } catch (err) {
-      lastError = err.message;
+      lastError = model + ": " + err.message;
     }
   }
 
   return res.status(200).json({ reply: "Error: " + lastError });
-          }
+}
