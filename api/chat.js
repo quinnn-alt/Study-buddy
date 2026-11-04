@@ -26,9 +26,9 @@ export default async function handler(req, res) {
       }
     );
     const data = await r.json();
-    const reply =
+        const reply =
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "I couldn't answer that. Try again.";
+      "Error: " + (data?.error?.message || JSON.stringify(data));
     res.status(200).json({ reply });
   } catch (err) {
     res.status(500).json({ reply: "Server error. Try again." });
