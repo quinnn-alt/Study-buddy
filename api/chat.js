@@ -14,27 +14,35 @@ export default async function handler(req, res) {
     "Ask what they've tried before explaining. Give hints first and a full " +
     "answer only if they're still stuck. Keep replies short and clear.";
 
-  try {
-    const r = await fetch(
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": process.env.GEMINI_API_KEY
-        },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: system }] },
-          contents: [{ role: "user", parts: [{ text: message }] }]
-        })
+  const models = ["gemini-2.5-flash", "gemini-2.5-flash-lite"];
+  let lastError = "";
+
+  for (const model of models) {
+    try {
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": process.env.GEMINI_API_KEY
+          },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: system }] },
+            contents: [{ role: "user", parts: [{ text: message }] }]
+          })
+        }
+      );
+      const data = await r.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
+        return res.status(200).json({ reply: text });
       }
-    );
-    const data = await r.json();
-    const reply =
-      data?.candidates?.[0]?.content?.parts?.[0]?.text ||
-      "Error: " + (data?.error?.message || JSON.stringify(data));
-    res.status(200).json({ reply });
-  } catch (err) {
-    res.status(200).json({ reply: "Server error: " + err.message });
+      lastError = data?.error?.message || JSON.stringify(data);
+    } catch (err) {
+      lastError = err.message;
+    }
   }
-}
+
+  return res.status(200).json({ reply: "Error: " + lastError });
+          }
