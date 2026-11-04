@@ -5,6 +5,10 @@ export default async function handler(req, res) {
 
   const { message } = req.body;
 
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(200).json({ reply: "Error: API key is missing in Vercel." });
+  }
+
   const system =
     "You are a patient tutor for beginners learning software development. " +
     "Ask what they've tried before explaining. Give hints first and a full " +
@@ -26,11 +30,11 @@ export default async function handler(req, res) {
       }
     );
     const data = await r.json();
-        const reply =
+    const reply =
       data?.candidates?.[0]?.content?.parts?.[0]?.text ||
       "Error: " + (data?.error?.message || JSON.stringify(data));
     res.status(200).json({ reply });
   } catch (err) {
-    res.status(500).json({ reply: "Server error. Try again." });
+    res.status(200).json({ reply: "Server error: " + err.message });
   }
 }
