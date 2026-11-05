@@ -45,36 +45,43 @@ export default async function handler(req, res) {
     { role: "user", parts: [{ text: message.slice(0, 2000) }] }
   ];
 
-  const models = ["gemini-3.8-flash", "gemini-3.5-flash"];
-  let lastError = "";
+    const models = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"];
+  const errors = [];
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
   for (const model of models) {
-    try {
-      const r = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-goog-api-key": process.env.GEMINI_API_KEY
-          },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: system }] },
-            contents
-          })
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const r = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-goog-api-key": process.env.GEMINI_API_KEY
+            },
+            body: JSON.stringify({
+              systemInstruction: { parts: [{ text: system }] },
+              contents
+            })
+          }
+        );
+        const data = await r.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (text) {
+          return res.status(200).json({ reply: text });
         }
-      );
-      const data = await r.json();
-      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (text) {
-        return res.status(200).json({ reply: text });
+        errors.push(model + ": " + (data?.error?.message || "no text"));
+        // retry only when Google is busy
+        if (r.status !== 503 && r.status !== 429) break;
+        await wait(1000);
+      } catch (err) {
+        errors.push(model + ": " + err.message);
+        await wait(1000);
       }
-      lastError = model + ": " + (data?.error?.message || JSON.stringify(data));
-    } catch (err) {
-      lastError = model + ": " + err.message;
     }
   }
 
-  console.error("Gemini failed:", lastError);
-  return res.status(200).json({ reply: "Error: " + lastError });
+  console.error("Gemini failed:", errors.join(" | "));
+  return res.status(500).json({ error: errors.join(" | ") });
 }
