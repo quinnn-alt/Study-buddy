@@ -63,11 +63,29 @@
     <input id="input" type="text" placeholder="Type your question" autocomplete="off" required>
     <button type="submit">Send</button>
   </form>
-
 <script>
   const messages = document.getElementById("messages");
   const form = document.getElementById("chat-form");
   const input = document.getElementById("input");
+
+  const KEY = "studybuddy_history";
+  const GREETING = "Hi! What are you studying today?";
+
+  function loadHistory() {
+    try {
+      return JSON.parse(localStorage.getItem(KEY)) || [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveHistory() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(history.slice(-50)));
+    } catch {}
+  }
+
+  let history = loadHistory();
 
   function addMessage(text, who) {
     const div = document.createElement("div");
@@ -77,17 +95,26 @@
     messages.scrollTop = messages.scrollHeight;
   }
 
+  function renderHistory() {
+    messages.innerHTML = "";
+    addMessage(GREETING, "bot");
+    history.forEach((m) => addMessage(m.text, m.role === "user" ? "user" : "bot"));
+  }
+
   async function getReply(userText) {
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userText })
+        body: JSON.stringify({
+          message: userText,
+          history: history.slice(-10)
+        })
       });
       const data = await res.json();
-      return data.reply;
+      return data.reply || null;
     } catch (err) {
-      return "Something went wrong. Try again.";
+      return null;
     }
   }
 
@@ -97,8 +124,29 @@
     if (!text) return;
     addMessage(text, "user");
     input.value = "";
-    addMessage(await getReply(text), "bot");
+
+    const reply = await getReply(text);
+    if (reply) {
+      addMessage(reply, "bot");
+      history.push({ role: "user", text });
+      history.push({ role: "model", text: reply });
+      saveHistory();
+    } else {
+      addMessage("Something went wrong. Try again.", "bot");
+    }
   });
+
+  const clearBtn = document.getElementById("clear");
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      history = [];
+      localStorage.removeItem(KEY);
+      renderHistory();
+    });
+  }
+
+  renderHistory();
 </script>
+
 </body>
 </html>
