@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Study Buddy</title>
 <style>
+  .opt.selected { background:#800020; color:#fff; }
   :root {
     --bg: #faf7f6; --panel: #ffffff; --ink: #2a1c1f; --muted: #7d6b6f;
     --accent: #7a1f2b; --accent-ink: #ffffff; --bot: #f1e6e8; --line: #e6dadd;
@@ -50,6 +51,20 @@
 </style>
 </head>
 <body>
+  <div id="setup" style="display:none">
+  <h2>Set up your tutor</h2>
+  <p>Your level</p>
+  <button class="opt" data-level="Beginner">Beginner</button>
+  <button class="opt" data-level="Intermediate">Intermediate</button>
+  <button class="opt" data-level="Professional">Professional</button>
+  <p>Your goal</p>
+  <button class="opt" data-goal="Learn from scratch">Learn from scratch</button>
+  <button class="opt" data-goal="Get a job">Get a job</button>
+  <button class="opt" data-goal="Build projects">Build projects</button>
+  <br><br>
+  <button id="startBtn">Start</button>
+  <a href="#" id="skipBtn">Skip</a>
+  </div>
   <header>
     <h1>Study Buddy</h1>
     <p>Ask about anything you're learning in tech.</p>
