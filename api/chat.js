@@ -3,7 +3,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "POST only" });
   }
 
-  const { message, history } = req.body || {};
+  const { message, history, profile } = req.body || {};
 
   if (!message || typeof message !== "string") {
     return res.status(400).json({ error: "Message is required." });
@@ -13,8 +13,38 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "API key is missing in Vercel." });
   }
 
+  // Only accept known level/goal values
+  const LEVELS = ["Beginner", "Intermediate", "Professional"];
+  const GOALS = ["Learn from scratch", "Get a job", "Build projects"];
+  const level = LEVELS.includes(profile?.level) ? profile.level : "Beginner";
+  const goal = GOALS.includes(profile?.goal) ? profile.goal : "Learn from scratch";
+
+  const levelGuide = {
+    Beginner:
+      "Use plain words, explain any jargon, and use simple examples. " +
+      "Go step by step.",
+    Intermediate:
+      "Assume they know the basics. Skip definitions of common terms and " +
+      "focus on how and why things work.",
+    Professional:
+      "Assume strong background knowledge. Be technical and concise, " +
+      "mention trade-offs and best practices, and skip the basics."
+  };
+
+  const goalGuide = {
+    "Learn from scratch":
+      "Build their understanding from the ground up before going deeper.",
+    "Get a job":
+      "Focus on what employers expect, common interview topics, and " +
+      "practical skills.",
+    "Build projects":
+      "Focus on hands-on examples they can use in a real project."
+  };
+
   const system =
-    "You are a patient tutor for beginners learning software development. " +
+    "You are a patient tutor for people learning technology. " +
+    `The learner's level is ${level} and their goal is: ${goal}. ` +
+    levelGuide[level] + " " + goalGuide[goal] + " " +
     "Ask what they've tried before explaining. Give hints first and a full " +
     "answer only if they're still stuck. Keep replies short and clear. " +
     "Use the earlier messages in this conversation so the learner never " +
@@ -45,7 +75,7 @@ export default async function handler(req, res) {
     { role: "user", parts: [{ text: message.slice(0, 2000) }] }
   ];
 
-    const models = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"];
+  const models = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite"];
   const errors = [];
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -84,4 +114,4 @@ export default async function handler(req, res) {
 
   console.error("Gemini failed:", errors.join(" | "));
   return res.status(500).json({ error: errors.join(" | ") });
-}
+    }
