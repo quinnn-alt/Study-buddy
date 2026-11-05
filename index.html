@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Study Buddy</title>
 <style>
-  .opt.selected { background:#800020; color:#fff; }
   :root {
     --bg: #faf7f6; --panel: #ffffff; --ink: #2a1c1f; --muted: #7d6b6f;
     --accent: #7a1f2b; --accent-ink: #ffffff; --bot: #f1e6e8; --line: #e6dadd;
@@ -48,28 +47,47 @@
     background: var(--accent); color: var(--accent-ink); cursor: pointer;
   }
   input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  #setup {
+    position: fixed; inset: 0; z-index: 10;
+    background: var(--bg); padding: 24px 18px; overflow-y: auto;
+    max-width: 640px; margin: 0 auto;
+  }
+  #setup p { color: var(--muted); margin: 18px 0 6px; }
+  .opt {
+    background: transparent; color: var(--ink);
+    border: 1px solid var(--line); margin: 4px 4px 4px 0;
+  }
+  .opt.selected { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+  #skipBtn { margin-left: 14px; color: var(--muted); }
+  #editProfile, #clear { margin: 8px 0 0 18px; padding: 6px 12px; font-size: 0.85rem; }
 </style>
 </head>
 <body>
   <div id="setup" style="display:none">
-  <h2>Set up your tutor</h2>
-  <p>Your level</p>
-  <button class="opt" data-level="Beginner">Beginner</button>
-  <button class="opt" data-level="Intermediate">Intermediate</button>
-  <button class="opt" data-level="Professional">Professional</button>
-  <p>Your goal</p>
-  <button class="opt" data-goal="Learn from scratch">Learn from scratch</button>
-  <button class="opt" data-goal="Get a job">Get a job</button>
-  <button class="opt" data-goal="Build projects">Build projects</button>
-  <br><br>
-  <button id="startBtn">Start</button>
-  <a href="#" id="skipBtn">Skip</a>
+    <h2>Set up your tutor</h2>
+    <p>Your level</p>
+    <button type="button" class="opt" data-level="Beginner">Beginner</button>
+    <button type="button" class="opt" data-level="Intermediate">Intermediate</button>
+    <button type="button" class="opt" data-level="Professional">Professional</button>
+    <p>Your goal</p>
+    <button type="button" class="opt" data-goal="Learn from scratch">Learn from scratch</button>
+    <button type="button" class="opt" data-goal="Get a job">Get a job</button>
+    <button type="button" class="opt" data-goal="Build projects">Build projects</button>
+    <br><br>
+    <button type="button" id="startBtn">Start</button>
+    <a href="#" id="skipBtn">Skip</a>
   </div>
+
   <header>
     <h1>Study Buddy</h1>
     <p>Ask about anything you're learning in tech.</p>
   </header>
-<button id="clear" type="button">Clear history</button>
+  <div>
+    <button id="editProfile" type="button">Change level/goal</button>
+    <button id="clear" type="button">Clear history</button>
+  </div>
+
   <div id="messages" aria-live="polite">
     <div class="msg bot">Hi! What are you studying today?</div>
   </div>
@@ -85,6 +103,7 @@
   const input = document.getElementById("input");
 
   const KEY = "studybuddy_history";
+  const PROFILE_KEY = "studybuddy_profile";
   const GREETING = "Hi! What are you studying today?";
 
   function loadHistory() {
@@ -102,6 +121,48 @@
   }
 
   let history = loadHistory();
+
+  // ----- Setup screen (level and goal) -----
+  const setup = document.getElementById("setup");
+  let profile = null;
+  try { profile = JSON.parse(localStorage.getItem(PROFILE_KEY)); } catch {}
+
+  let picked = { level: "Beginner", goal: "Learn from scratch" };
+
+  function highlight() {
+    setup.querySelectorAll("[data-level]").forEach((b) =>
+      b.classList.toggle("selected", b.dataset.level === picked.level));
+    setup.querySelectorAll("[data-goal]").forEach((b) =>
+      b.classList.toggle("selected", b.dataset.goal === picked.goal));
+  }
+
+  setup.querySelectorAll("[data-level]").forEach((b) => {
+    b.addEventListener("click", () => { picked.level = b.dataset.level; highlight(); });
+  });
+  setup.querySelectorAll("[data-goal]").forEach((b) => {
+    b.addEventListener("click", () => { picked.goal = b.dataset.goal; highlight(); });
+  });
+
+  function finishSetup() {
+    profile = { level: picked.level, goal: picked.goal };
+    try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch {}
+    setup.style.display = "none";
+  }
+
+  document.getElementById("startBtn").addEventListener("click", finishSetup);
+  document.getElementById("skipBtn").addEventListener("click", (e) => {
+    e.preventDefault();
+    finishSetup();
+  });
+  document.getElementById("editProfile").addEventListener("click", () => {
+    if (profile) picked = { level: profile.level, goal: profile.goal };
+    highlight();
+    setup.style.display = "block";
+  });
+
+  highlight();
+  if (!profile) setup.style.display = "block";
+  // ----- End setup screen -----
 
   function addMessage(text, who) {
     const div = document.createElement("div");
@@ -124,7 +185,8 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: userText,
-          history: history.slice(-10)
+          history: history.slice(-10),
+          profile: profile
         })
       });
       const data = await res.json();
@@ -164,4 +226,4 @@
   renderHistory();
 </script>
 </body>
-</html>
+      </html>
