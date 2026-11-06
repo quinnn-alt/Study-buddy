@@ -78,6 +78,21 @@
   .step button { flex: none; padding: 6px 14px; font-size: 0.85rem; }
   #roadmapActions { display: flex; gap: 8px; margin-top: 18px; }
   #roadmapActions .opt { margin: 0; }
+
+  .msg.thinking { color: var(--muted); font-style: italic; }
+  .msg.thinking::after {
+    content: "";
+    animation: dots 1.2s steps(4, end) infinite;
+  }
+  @keyframes dots {
+    0% { content: ""; }
+    25% { content: "."; }
+    50% { content: ".."; }
+    75%, 100% { content: "..."; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .msg.thinking::after { animation: none; content: "..."; }
+  }
 </style>
 </head>
 <body>
@@ -387,9 +402,13 @@
 
   async function sendMessage(text) {
     addMessage(text, "user");
-    addMessage("Thinking...", "bot");
+    addMessage("Thinking", "bot");
     const pending = messages.lastChild;
+    pending.classList.add("thinking");
+
     const reply = await getReply(text);
+
+    pending.classList.remove("thinking");
     if (reply) {
       pending.textContent = reply;
       history.push({ role: "user", text });
@@ -421,4 +440,4 @@
   renderHistory();
 </script>
 </body>
-  </html>
+</html>
