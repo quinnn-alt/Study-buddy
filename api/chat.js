@@ -3,7 +3,8 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "POST only" });
   }
 
-  const { message, history, profile } = req.body || {};
+  const { message, history, profile, mode } = req.body || {};
+  const isRoadmap = mode === "roadmap";
 
   if (!message || typeof message !== "string") {
     return res.status(400).json({ error: "Message is required." });
@@ -50,6 +51,12 @@ export default async function handler(req, res) {
     "Use the earlier messages in this conversation so the learner never " +
     "has to repeat themselves.";
 
+  const roadmapSystem =
+    "You design learning roadmaps for technology learners. " +
+    "Reply with only a JSON array of 6 to 8 objects, each with " +
+    "\"title\", \"desc\" (one sentence) and \"type\" (\"theory\" or \"practical\"). " +
+    "No questions, no extra text.";
+
   // Clean the history: valid roles only, last 10, must start with a user message
   let past = Array.isArray(history) ? history : [];
   past = past
@@ -69,6 +76,9 @@ export default async function handler(req, res) {
   while (past.length && past[0].role !== "user") {
     past.shift();
   }
+
+  // A roadmap request never uses the chat history
+  if (isRoadmap) past = [];
 
   const contents = [
     ...past,
@@ -91,8 +101,13 @@ export default async function handler(req, res) {
               "x-goog-api-key": process.env.GEMINI_API_KEY
             },
             body: JSON.stringify({
-              systemInstruction: { parts: [{ text: system }] },
-              contents
+              systemInstruction: {
+                parts: [{ text: isRoadmap ? roadmapSystem : system }]
+              },
+              contents,
+              ...(isRoadmap
+                ? { generationConfig: { responseMimeType: "application/json" } }
+                : {})
             })
           }
         );
@@ -114,4 +129,4 @@ export default async function handler(req, res) {
 
   console.error("Gemini failed:", errors.join(" | "));
   return res.status(500).json({ error: errors.join(" | ") });
-    }
+}
