@@ -46,21 +46,38 @@
     font: inherit; padding: 10px 18px; border: 0; border-radius: 999px;
     background: var(--accent); color: var(--accent-ink); cursor: pointer;
   }
+  button:disabled { opacity: 0.5; cursor: default; }
   input:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-  #setup {
+  #setup, #roadmap {
     position: fixed; inset: 0; z-index: 10;
     background: var(--bg); padding: 24px 18px; overflow-y: auto;
     max-width: 640px; margin: 0 auto;
   }
-  #setup p { color: var(--muted); margin: 18px 0 6px; }
+  #setup p, #roadmap p { color: var(--muted); margin: 18px 0 6px; }
+  #setup #topic { width: 100%; }
   .opt {
     background: transparent; color: var(--ink);
     border: 1px solid var(--line); margin: 4px 4px 4px 0;
   }
   .opt.selected { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   #skipBtn { margin-left: 14px; color: var(--muted); }
-  #editProfile, #clear { margin: 8px 0 0 18px; padding: 6px 12px; font-size: 0.85rem; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; padding: 8px 18px 0; }
+  .toolbar button { padding: 6px 12px; font-size: 0.85rem; }
+
+  .step {
+    display: flex; gap: 12px; align-items: flex-start;
+    padding: 12px 0; border-bottom: 1px solid var(--line);
+  }
+  .step input[type="checkbox"] { flex: none; width: 20px; height: 20px; margin-top: 3px; accent-color: var(--accent); }
+  .step .body { flex: 1; min-width: 0; }
+  .step .title { font-weight: bold; overflow-wrap: anywhere; }
+  .step .desc { color: var(--muted); font-size: 0.9rem; margin-top: 2px; line-height: 1.4; }
+  .step .kind { display: inline-block; font-size: 0.8rem; color: var(--accent); margin-top: 4px; }
+  .step.done .title { text-decoration: line-through; opacity: 0.6; }
+  .step button { flex: none; padding: 6px 14px; font-size: 0.85rem; }
+  #roadmapActions { display: flex; gap: 8px; margin-top: 18px; }
+  #roadmapActions .opt { margin: 0; }
 </style>
 </head>
 <body>
@@ -74,16 +91,29 @@
     <button type="button" class="opt" data-goal="Learn from scratch">Learn from scratch</button>
     <button type="button" class="opt" data-goal="Get a job">Get a job</button>
     <button type="button" class="opt" data-goal="Build projects">Build projects</button>
+    <p>What do you want to learn?</p>
+    <input id="topic" type="text" placeholder="For example: Python, web development" autocomplete="off">
     <br><br>
     <button type="button" id="startBtn">Start</button>
     <a href="#" id="skipBtn">Skip</a>
+  </div>
+
+  <div id="roadmap" style="display:none">
+    <h2>Your roadmap</h2>
+    <p id="roadmapMeta"></p>
+    <div id="steps"></div>
+    <div id="roadmapActions">
+      <button type="button" id="closeRoadmap">Back to chat</button>
+      <button type="button" id="regenRoadmap" class="opt">Rebuild roadmap</button>
+    </div>
   </div>
 
   <header>
     <h1>Study Buddy</h1>
     <p>Ask about anything you're learning in tech.</p>
   </header>
-  <div>
+  <div class="toolbar">
+    <button id="roadmapBtn" type="button">Roadmap</button>
     <button id="editProfile" type="button">Change level/goal</button>
     <button id="clear" type="button">Clear history</button>
   </div>
@@ -104,6 +134,7 @@
 
   const KEY = "studybuddy_history";
   const PROFILE_KEY = "studybuddy_profile";
+  const ROADMAP_KEY = "studybuddy_roadmap";
   const GREETING = "Hi! What are you studying today?";
 
   function loadHistory() {
@@ -122,8 +153,134 @@
 
   let history = loadHistory();
 
-  // ----- Setup screen (level and goal) -----
+  // ----- Roadmap -----
+  const roadmapEl = document.getElementById("roadmap");
+  const stepsEl = document.getElementById("steps");
+  const roadmapMeta = document.getElementById("roadmapMeta");
+  const regenBtn = document.getElementById("regenRoadmap");
+
+  let roadmap = null;
+  try { roadmap = JSON.parse(localStorage.getItem(ROADMAP_KEY)); } catch {}
+
+  function profileSig(p) {
+    return [p.level, p.goal, p.topic || ""].join("|");
+  }
+
+  function saveRoadmap() {
+    try { localStorage.setItem(ROADMAP_KEY, JSON.stringify(roadmap)); } catch {}
+  }
+
+  function parseSteps(text) {
+    const start = text.indexOf("[");
+    const end = text.lastIndexOf("]");
+    if (start < 0 || end <= start) return null;
+    try {
+      const arr = JSON.parse(text.slice(start, end + 1));
+      const steps = arr
+        .filter((x) => x && x.title)
+        .slice(0, 10)
+        .map((x) => ({
+          title: String(x.title),
+          desc: String(x.desc || ""),
+          type: x.type === "practical" ? "practical" : "theory",
+          done: false
+        }));
+      return steps.length ? steps : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function renderRoadmap() {
+    stepsEl.innerHTML = "";
+    if (!roadmap) return;
+    roadmapMeta.textContent =
+      profile.level + " · " + profile.goal + " · " + (profile.topic || "Technology");
+    roadmap.steps.forEach((s, i) => {
+      const row = document.createElement("div");
+      row.className = "step" + (s.done ? " done" : "");
+
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.checked = s.done;
+      box.setAttribute("aria-label", "Mark done: " + s.title);
+      box.addEventListener("change", () => {
+        roadmap.steps[i].done = box.checked;
+        row.classList.toggle("done", box.checked);
+        saveRoadmap();
+      });
+
+      const body = document.createElement("div");
+      body.className = "body";
+      const title = document.createElement("div");
+      title.className = "title";
+      title.textContent = s.title;
+      const desc = document.createElement("div");
+      desc.className = "desc";
+      desc.textContent = s.desc;
+      const kind = document.createElement("span");
+      kind.className = "kind";
+      kind.textContent = s.type === "practical" ? "Practical" : "Theory";
+      body.append(title, desc, kind);
+
+      const go = document.createElement("button");
+      go.type = "button";
+      go.textContent = "Start";
+      go.addEventListener("click", () => {
+        roadmapEl.style.display = "none";
+        sendMessage("Teach me this step of my roadmap: " + s.title + ". " + s.desc);
+      });
+
+      row.append(box, body, go);
+      stepsEl.appendChild(row);
+    });
+  }
+
+  async function generateRoadmap() {
+    roadmapEl.style.display = "block";
+    regenBtn.disabled = true;
+    stepsEl.innerHTML = "";
+    roadmapMeta.textContent = "Building your roadmap...";
+
+    const topic = profile.topic || "software development and technology";
+    const prompt =
+      "Create a learning roadmap for a " + profile.level + " learner whose goal is \"" +
+      profile.goal + "\" and who wants to learn " + topic + ". " +
+      "Reply with ONLY a JSON array of 6 to 8 steps, with no extra text and no code fences. " +
+      "Each step is an object: {\"title\": short title, \"desc\": one sentence, " +
+      "\"type\": \"theory\" or \"practical\"}. Order the steps from first to last.";
+
+    const reply = await askAI(prompt, []);
+    const steps = reply ? parseSteps(reply) : null;
+
+    if (steps) {
+      roadmap = { sig: profileSig(profile), steps };
+      saveRoadmap();
+      renderRoadmap();
+    } else {
+      roadmapMeta.textContent =
+        "Could not build the roadmap. Check your connection and tap Rebuild roadmap.";
+    }
+    regenBtn.disabled = false;
+  }
+
+  regenBtn.addEventListener("click", generateRoadmap);
+  document.getElementById("closeRoadmap").addEventListener("click", () => {
+    roadmapEl.style.display = "none";
+  });
+  document.getElementById("roadmapBtn").addEventListener("click", () => {
+    if (roadmap && roadmap.sig === profileSig(profile)) {
+      renderRoadmap();
+      roadmapEl.style.display = "block";
+    } else {
+      generateRoadmap();
+    }
+  });
+  // ----- End roadmap -----
+
+  // ----- Setup screen (level, goal, topic) -----
   const setup = document.getElementById("setup");
+  const topicInput = document.getElementById("topic");
   let profile = null;
   try { profile = JSON.parse(localStorage.getItem(PROFILE_KEY)); } catch {}
 
@@ -144,9 +301,14 @@
   });
 
   function finishSetup() {
-    profile = { level: picked.level, goal: picked.goal };
+    profile = {
+      level: picked.level,
+      goal: picked.goal,
+      topic: topicInput.value.trim()
+    };
     try { localStorage.setItem(PROFILE_KEY, JSON.stringify(profile)); } catch {}
     setup.style.display = "none";
+    if (!roadmap || roadmap.sig !== profileSig(profile)) generateRoadmap();
   }
 
   document.getElementById("startBtn").addEventListener("click", finishSetup);
@@ -155,13 +317,20 @@
     finishSetup();
   });
   document.getElementById("editProfile").addEventListener("click", () => {
-    if (profile) picked = { level: profile.level, goal: profile.goal };
+    if (profile) {
+      picked = { level: profile.level, goal: profile.goal };
+      topicInput.value = profile.topic || "";
+    }
     highlight();
     setup.style.display = "block";
   });
 
   highlight();
-  if (!profile) setup.style.display = "block";
+  if (profile) {
+    topicInput.value = profile.topic || "";
+  } else {
+    setup.style.display = "block";
+  }
   // ----- End setup screen -----
 
   function addMessage(text, who) {
@@ -178,14 +347,14 @@
     history.forEach((m) => addMessage(m.text, m.role === "user" ? "user" : "bot"));
   }
 
-  async function getReply(userText) {
+  async function askAI(userText, hist) {
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: userText,
-          history: history.slice(-10),
+          history: hist,
           profile: profile
         })
       });
@@ -196,13 +365,12 @@
     }
   }
 
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const text = input.value.trim();
-    if (!text) return;
-    addMessage(text, "user");
-    input.value = "";
+  function getReply(userText) {
+    return askAI(userText, history.slice(-10));
+  }
 
+  async function sendMessage(text) {
+    addMessage(text, "user");
     const reply = await getReply(text);
     if (reply) {
       addMessage(reply, "bot");
@@ -212,6 +380,14 @@
     } else {
       addMessage("Something went wrong. Try again.", "bot");
     }
+  }
+
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const text = input.value.trim();
+    if (!text) return;
+    input.value = "";
+    sendMessage(text);
   });
 
   const clearBtn = document.getElementById("clear");
@@ -226,4 +402,4 @@
   renderHistory();
 </script>
 </body>
-      </html>
+  </html>
