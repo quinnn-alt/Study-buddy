@@ -250,7 +250,7 @@
       "Each step is an object: {\"title\": short title, \"desc\": one sentence, " +
       "\"type\": \"theory\" or \"practical\"}. Order the steps from first to last.";
 
-    const reply = await askAI(prompt, []);
+    const reply = await askAI(prompt, [], "roadmap");
     const steps = reply ? parseSteps(reply) : null;
 
     if (steps) {
@@ -347,21 +347,37 @@
     history.forEach((m) => addMessage(m.text, m.role === "user" ? "user" : "bot"));
   }
 
-  async function askAI(userText, hist) {
+  let lastError = "";
+
+  async function askAI(userText, hist, mode) {
+    lastError = "";
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 40000);
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           message: userText,
           history: hist,
-          profile: profile
+          profile: profile,
+          mode: mode
         })
       });
-      const data = await res.json();
-      return data.reply || null;
+      const raw = await res.text();
+      let data = {};
+      try { data = JSON.parse(raw); } catch {}
+      if (!res.ok || !data.reply) {
+        lastError = "HTTP " + res.status + ": " + (data.error || raw.slice(0, 150));
+        return null;
+      }
+      return data.reply;
     } catch (err) {
+      lastError = err.name === "AbortError" ? "Timed out" : err.message;
       return null;
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -371,15 +387,18 @@
 
   async function sendMessage(text) {
     addMessage(text, "user");
+    addMessage("Thinking...", "bot");
+    const pending = messages.lastChild;
     const reply = await getReply(text);
     if (reply) {
-      addMessage(reply, "bot");
+      pending.textContent = reply;
       history.push({ role: "user", text });
       history.push({ role: "model", text: reply });
       saveHistory();
     } else {
-      addMessage("Something went wrong. Try again.", "bot");
+      pending.textContent = "Something went wrong (" + lastError + "). Try again.";
     }
+    messages.scrollTop = messages.scrollHeight;
   }
 
   form.addEventListener("submit", (e) => {
